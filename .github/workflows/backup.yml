@@ -81,4 +81,4 @@ jobs:
           OSS_ACCESS_KEY_ID: ${{ steps.aliyun.outputs.aliyun-access-key-id }}
           OSS_ACCESS_KEY_SECRET: ${{ steps.aliyun.outputs.aliyun-access-key-secret }}
           OSS_SESSION_TOKEN: ${{ steps.aliyun.outputs.aliyun-security-token }}
-        run: uv run --locked --isolated python -B oss_backup.py
+        run: uv run --locked --isolated python -B -m src.oss_backup
