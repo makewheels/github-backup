@@ -37,7 +37,10 @@ jobs:
             exit 0
           fi
           git commit -m '记录备份触发时间'
-          git push origin HEAD:main
+          if ! git push origin HEAD:main; then
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
 
   backup:
     permissions:
