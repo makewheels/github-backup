@@ -1,0 +1,81 @@
+name: GitHub 仓库备份到 OSS
+
+on:
+  schedule:
+    - cron: '30 3 1 * *'
+      timezone: Asia/Shanghai
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: github-repository-backup-oss
+  cancel-in-progress: false
+
+jobs:
+  record-trigger:
+    if: github.ref == 'refs/heads/main' && vars.BACKUP_OSS_ROLE_ARN != ''
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: main
+      - name: 提交触发时间
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --jq '{triggered_at: .created_at, event, run_id: .id, run_attempt}' \
+            > .github/backup-trigger.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/backup-trigger.json
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m '记录备份触发时间'
+          git push origin HEAD:main
+
+  backup:
+    permissions:
+      contents: read
+      id-token: write
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      TZ: Asia/Shanghai
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          python-version: '3.12'
+          enable-cache: false
+      - name: 获取 OSS 临时凭据
+        id: aliyun
+        uses: aliyun/configure-aliyun-credentials-action@1e5248c8d5d93a8781ac344a68e19a43341e79e6 # v1
+        with:
+          oidc-provider-arn: ${{ vars.BACKUP_OSS_PROVIDER_ARN }}
+          role-to-assume: ${{ vars.BACKUP_OSS_ROLE_ARN }}
+          audience: sts.aliyuncs.com
+          role-session-expiration: '14400'
+          role-session-name: backup-${{ github.run_id }}
+      - name: 备份仓库并核验清单
+        env:
+          BACKUP_OWNER: ${{ github.repository_owner }}
+          BACKUP_APP_ID: ${{ vars.BACKUP_APP_ID }}
+          BACKUP_APP_INSTALLATION_ID: ${{ vars.BACKUP_APP_INSTALLATION_ID }}
+          BACKUP_APP_PRIVATE_KEY: ${{ secrets.BACKUP_APP_PRIVATE_KEY }}
+          BACKUP_GITHUB_TOKEN: ${{ secrets.BACKUP_GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.BACKUP_GITHUB_TOKEN }}
+          BACKUP_OSS_BUCKET: ${{ secrets.BACKUP_OSS_BUCKET }}
+          BACKUP_OSS_REGION: ${{ vars.BACKUP_OSS_REGION }}
+          OSS_ACCESS_KEY_ID: ${{ steps.aliyun.outputs.aliyun-access-key-id }}
+          OSS_ACCESS_KEY_SECRET: ${{ steps.aliyun.outputs.aliyun-access-key-secret }}
+          OSS_SESSION_TOKEN: ${{ steps.aliyun.outputs.aliyun-security-token }}
+        run: uv run --locked --isolated python -B oss_backup.py
