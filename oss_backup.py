@@ -142,6 +142,7 @@ class OssBackup:
             size = path.stat().st_size
             request = oss.PutObjectRequest(
                 bucket=self.bucket, key=key, content_type="application/zip", forbid_overwrite=True,
+                storage_class=oss.StorageClassType.IA,
                 metadata={"sha256": digest, "commit": revision or "empty",
                           "repository-id": str(repository["id"])},
             )
@@ -160,6 +161,7 @@ class OssBackup:
     def complete(self, manifest):
         self.client.put_object(oss.PutObjectRequest(
             bucket=self.bucket, key=self.manifest_key, content_type="application/json",
+            storage_class=oss.StorageClassType.IA,
             forbid_overwrite=True, body=to_json(manifest).encode(),
         ))
         if self.manifest() != manifest:

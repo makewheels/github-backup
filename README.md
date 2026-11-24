@@ -9,7 +9,7 @@
 - 将桶名保存为 Actions Secret `BACKUP_OSS_BUCKET`。地域和 RAM 配置使用 Actions 变量 `BACKUP_OSS_REGION`、`BACKUP_OSS_PROVIDER_ARN` 和 `BACKUP_OSS_ROLE_ARN`。RAM 角色校验 GitHub OIDC 的 `sub`，包括账号 ID、仓库 ID 和默认分支，只能访问备份桶的 `github-backups/` 前缀。工作流使用 OSS 普通公网域名，运行日志和摘要只报告备份进度及汇总结果。
 - 私有 GitHub App 安装到账号的全部仓库，权限包括只读 Contents、Issues、Pull requests 和 Metadata。App ID 和安装 ID 分别放在 Actions 变量 `BACKUP_APP_ID` 和 `BACKUP_APP_INSTALLATION_ID`。App 私钥放在 Actions Secret `BACKUP_APP_PRIVATE_KEY`。程序按需更新短期安装令牌。也可用 Actions Secret `BACKUP_GITHUB_TOKEN` 配置备份用令牌。
 - OSS 对象位于 `github-backups/YYYYMM/`。大于 100 MiB 的归档按 32 MiB 分片并发上传。全部归档核对后写入 `manifest.json`，其中包含仓库 ID、提交、对象键、大小和 SHA-256。恢复时按清单下载后先核对 SHA-256，再按下文方法解压。
-- 备份桶默认使用低频访问（IA）。工作流核验当月清单后，保留最近三份成功的月度备份，并清理早于这三份的月度归档。清理需要 RAM 角色能列出 `github-backups/`，并删除该前缀下的归档和清单。未完成的分片由 OSS 生命周期规则在七天后清除。
+- 上传时将归档和清单指定为低频访问（IA），也适用于默认存储类型为标准的桶。工作流核验当月清单后，保留最近三份成功的月度备份，并清理早于这三份的月度归档。清理需要 RAM 角色能列出 `github-backups/`，并删除该前缀下的归档和清单。未完成的分片由 OSS 生命周期规则在七天后清除。
 
 ## 百度网盘本机备份
 
